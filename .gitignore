@@ -35,6 +35,15 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Editor files
+.idea
+.idea/*
+*~
+.project
+.pydevproject
+.settings/*
+.DS_Store
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
