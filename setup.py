@@ -35,6 +35,7 @@ if __name__ == '__main__':
         packages=find_packages(),
         package_data={
             "orangecontrib.lookalike.widgets": ["icons/*.svg"],
+            "orangecontrib.lookalike.widgets": ["data/*.xml"]
         },
         install_requires=[
             'Orange3',
