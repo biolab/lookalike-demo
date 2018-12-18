@@ -15,7 +15,7 @@ from Orange.widgets import gui
 
 
 face_cascade_classifier = cv2.CascadeClassifier(
-    os.path.join(os.path.dirname(__file__), 'data', 'haarcascade_frontalface_default.xml'))
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'haarcascade_frontalface_default.xml'))
 
 
 class OWFace(widget.OWWidget):
