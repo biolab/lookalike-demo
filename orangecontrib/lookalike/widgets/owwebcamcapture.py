@@ -184,8 +184,8 @@ class OWNWebcamCapture(widget.OWWidget):
         for image, suffix, output in (
                 (frame, '', self.Output.SNAPSHOT),
                 (self.clip_aspect_frame(frame), '_aspect', self.Output.SNAPSHOT_ASPECT)):
-            path = os.path.join(
-                self.IMAGE_DIR, '{normed_name}_{timestamp}{suffix}.png'.format(**locals()))
+            image_name = os.path.join('{normed_name}_{timestamp}{suffix}.png'.format(**locals()))
+            path = os.path.join(self.IMAGE_DIR, image_name)
             cv2.imwrite(path,
                         # imwrite expects original bgr image, so this is reversed
                         self.bgr2rgb(image) if self.avatar_filter else image)
@@ -194,7 +194,7 @@ class OWNWebcamCapture(widget.OWWidget):
             image_var.attributes['type'] = 'image'
             image_var.attributes['origin'] = self.IMAGE_DIR
             table = Table.from_numpy(Domain([], metas=[StringVariable('name'), image_var]),
-                                     np.empty((1, 0)), metas=np.array([[image_title, path]]))
+                                     np.empty((1, 0)), metas=np.array([[image_title, image_name]]))
             self.send(output, table)
 
         self.snapshot_flash = 80
