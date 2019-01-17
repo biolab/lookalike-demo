@@ -17,6 +17,12 @@ from Orange.widgets import gui
 face_cascade_classifier = cv2.CascadeClassifier(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'haarcascade_frontalface_default.xml'))
 
+eye_cascade_classifier = cv2.CascadeClassifier(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'haarcascade_eye.xml'))
+
+mouth_cascade_classifier = cv2.CascadeClassifier(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'haarcascade_smile.xml'))
+
 
 class OWFace(widget.OWWidget):
     name = "Face Detector"
@@ -53,6 +59,11 @@ class OWFace(widget.OWWidget):
 
     def read_img(self, file_path):
         """Read an image from file or url and convert it to grayscale."""
+
+        for x in self.data.domain.metas :
+            if (x.attributes.get("type") == "image") :
+                file_path = x.attributes.get("origin") + "/" + file_path
+
         try:
             if os.path.isfile(file_path):
                 img = cv2.imread(file_path, cv2.IMREAD_GRAYSCALE)

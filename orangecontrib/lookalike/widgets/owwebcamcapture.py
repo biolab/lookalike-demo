@@ -14,6 +14,8 @@ from Orange.data import Table, Domain, StringVariable
 from Orange.widgets import gui, widget, settings
 
 from orangecontrib.lookalike.widgets.owface import face_cascade_classifier
+from orangecontrib.lookalike.widgets.owface import eye_cascade_classifier
+from orangecontrib.lookalike.widgets.owface import mouth_cascade_classifier
 
 
 class OWNWebcamCapture(widget.OWWidget):
@@ -33,6 +35,9 @@ class OWNWebcamCapture(widget.OWWidget):
     want_main_area = False
 
     avatar_filter = settings.Setting(False)
+    frame_viewer = settings.Setting(False)
+    eye_frame_viewer = settings.Setting(False)
+    mouth_frame_viewer = settings.Setting(False)
     image_title = ''
 
     DEFAULT_TITLE = 'Snapshot'
@@ -65,7 +70,13 @@ class OWNWebcamCapture(widget.OWWidget):
                                                    clicked=self.capture_image)
         hbox.layout().addWidget(button, 1000)
         box.layout().addWidget(hbox)
-
+        
+        hbox = gui.hBox(box)
+        gui.checkBox(hbox, self, 'frame_viewer', 'View Head Frame')
+        gui.checkBox(hbox, self, 'eye_frame_viewer', 'View Eye Frame')
+        gui.checkBox(hbox, self, 'mouth_frame_viewer', 'View Mouth Frame')
+        box.layout().addWidget(hbox)
+        
         timer = QTimer(self, interval=40)
         timer.timeout.connect(self.update_webcam_image)
         timer.start()
@@ -100,6 +111,17 @@ class OWNWebcamCapture(widget.OWWidget):
         if self.snapshot_flash > 0:
             np.clip(frame.astype(np.int16) + self.snapshot_flash, 0, 255, out=frame)
             self.snapshot_flash -= 15
+        if self.frame_viewer:
+            faces = face_cascade_classifier.detectMultiScale(
+                cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
+            for (x,y,w,h) in faces:
+                cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
+                if self.eye_frame_viewer:
+                    roi_color = frame[y:y+h, x:x+w]
+                    eyes = eye_cascade_classifier.detectMultiScale(cv2.cvtColor(roi_color, cv2.COLOR_BGR2GRAY))
+                    for (ex,ey,ew,eh) in eyes:
+                        cv2.rectangle(roi_color,(ex,ey),(ex+ew,ey+eh),(0,255,0),2)
+                
         image = QImage(frame if self.avatar_filter else self.bgr2rgb(frame),
                        frame.shape[1], frame.shape[0], QImage.Format_RGB888)
         pix = QPixmap.fromImage(image).scaled(self.imageLabel.size(),
@@ -113,6 +135,8 @@ class OWNWebcamCapture(widget.OWWidget):
 
         faces = face_cascade_classifier.detectMultiScale(
             cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
+        for (x,y,w,h) in faces:
+            cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
         fh, fw = frame.shape[:2]
         if len(faces):
             x, y, w, h = faces[0]
@@ -168,6 +192,7 @@ class OWNWebcamCapture(widget.OWWidget):
 
             image_var = StringVariable('image')
             image_var.attributes['type'] = 'image'
+            image_var.attributes['origin'] = self.IMAGE_DIR
             table = Table.from_numpy(Domain([], metas=[StringVariable('name'), image_var]),
                                      np.empty((1, 0)), metas=np.array([[image_title, path]]))
             self.send(output, table)
