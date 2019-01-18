@@ -7,17 +7,18 @@ from urllib.parse import urlparse
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 
-from PyQt4.QtCore import Qt, QRectF, QByteArray, QIODevice, QBuffer, QSizeF
-from PyQt4.QtGui import (QGraphicsWidget, QHeaderView, QItemSelectionModel,
-                         QGraphicsPixmapItem,  QPainter, QDialog, QPalette, 
-                         QGraphicsLayoutItem, QGraphicsView, QGraphicsScene, 
-                         QItemSelection, QPixmap, QGraphicsGridLayout,
-                         QGraphicsSimpleTextItem, QBrush, QFont, QTableView)
+from AnyQt.QtCore import Qt, QRectF, QByteArray, QIODevice, QBuffer, QSizeF, \
+    QItemSelection, QItemSelectionModel, QModelIndex
+from AnyQt.QtGui import (QPainter, QPalette, QPixmap, QBrush, QFont)
+from AnyQt.QtWidgets import (QGraphicsWidget, QHeaderView, QGraphicsPixmapItem,
+                             QDialog, QGraphicsLayoutItem, QGraphicsView,
+                             QGraphicsScene, QGraphicsGridLayout,
+                             QGraphicsSimpleTextItem, QTableView)
 
 from Orange.data import Table
 from Orange.widgets import gui
 from Orange.widgets.settings import Setting
-from Orange.widgets.utils.itemmodels import PyListModel, PyTableModel
+from Orange.widgets.utils.itemmodels import PyTableModel
 from Orange.widgets.widget import Msg, OWWidget
 
 
@@ -191,7 +192,6 @@ class OWLookalike(OWWidget):
 
         self.setMinimumSize(1050, 630)
         box = gui.vBox(self.controlArea, "Neighbors")
-        self.neighbors_model = PyListModel()
         self.neighbors_model = PyTableModel()
 
         self.neighbors_view = QTableView()
@@ -250,7 +250,7 @@ class OWLookalike(OWWidget):
             return os.path.splitext(os.path.basename(name))[0].replace("_", " ")
 
         model = [[get_name(inst[self.neighbors_img_attr].value),
-                  inst["similarity"].value if "similarity" in
+                  inst["distance"].value if "distance" in
                                               self.neighbors.domain else ""]
                  for inst in self.neighbors]
         self.neighbors_model.wrap(model)
@@ -331,9 +331,9 @@ class OWLookalike(OWWidget):
         widget.setPos(0, 60)
         self.scene.addItem(widget)
 
-        title = QGraphicsSimpleTextItem("I am {:.1f}% {}".format(
-            self.neighbors_model[self.neighbor_index][1],
-            self.neighbors_model[self.neighbor_index][0]))
+        title = QGraphicsSimpleTextItem("I am {:.2f}% {}".format(
+            float(self.neighbors_model.index(self.neighbor_index, 1).data()),
+            self.neighbors_model.index(self.neighbor_index, 0).data()))
         title.setFont(QFont("Garamond", 25))
 
         title_widget = TitleGraphicsWidget(neighbors_image.width() * 2 + 40)
@@ -470,7 +470,7 @@ class OWLookalike(OWWidget):
 
 
 if __name__ == "__main__":
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgets import QApplication
 
     a = QApplication([])
     ow = OWLookalike()
