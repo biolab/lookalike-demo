@@ -7,10 +7,11 @@ import unicodedata
 import cv2
 import numpy as np
 
-from PyQt4.QtCore import Qt, QTimer, QSize
-from PyQt4.QtGui import QLabel, QPushButton, QImage, QPixmap, QSizePolicy
+from AnyQt.QtCore import Qt, QTimer, QSize
+from AnyQt.QtWidgets import QLabel, QPushButton, QSizePolicy
+from AnyQt.QtGui import QImage, QPixmap, QImageReader
 
-from Orange.data import Table, Domain, StringVariable
+from Orange.data import Table, Domain, StringVariable, ContinuousVariable
 from Orange.widgets import gui, widget, settings
 
 from orangecontrib.lookalike.widgets.owface import face_cascade_classifier
@@ -166,20 +167,35 @@ class OWNWebcamCapture(widget.OWWidget):
                         # imwrite expects original bgr image, so this is reversed
                         self.bgr2rgb(image) if self.avatar_filter else image)
 
-            image_var = StringVariable('image')
+            size = ContinuousVariable.make('size')
+            width = ContinuousVariable.make('width')
+            height = ContinuousVariable.make('height')
+            s, w, h = self.image_meta_data(path)
+            image_var = StringVariable.make('image')
             image_var.attributes['type'] = 'image'
-            table = Table.from_numpy(Domain([], metas=[StringVariable('name'), image_var]),
-                                     np.empty((1, 0)), metas=np.array([[image_title, path]]))
+            metas = np.array([[image_title, path, s, w, h]], dtype=object)
+            table = Table.from_numpy(Domain([],
+                                     metas=[StringVariable.make('image name'),
+                                     image_var, size, width, height]),
+                                     np.empty((1, 0)), metas=metas)
             self.send(output, table)
 
         self.snapshot_flash = 80
+
+    def image_meta_data(self, path):
+        reader = QImageReader(path)
+        size = os.stat(path).st_size
+        width = reader.size().width()
+        height = reader.size().height()
+        return (size, width, height)
+
 
     def __del__(self):
         shutil.rmtree(self.IMAGE_DIR, ignore_errors=True)
 
 
 if __name__ == "__main__":
-    from PyQt4.QtGui import QApplication
+    from AnyQt.QtWidgets import QApplication
     a = QApplication([])
     ow = OWNWebcamCapture()
     ow.show()
