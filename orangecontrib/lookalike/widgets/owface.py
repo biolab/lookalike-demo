@@ -68,17 +68,19 @@ class OWFace(widget.OWWidget):
         """Find the face in image file_path and store it in face_path."""
         img = self.read_img(file_path)
         if img is None:
-            return False
+            return None, None, None
         # downscale to a reasonable size (long edge <= 1024)
         f = min(1024/img.shape[0], 1024/img.shape[1], 1)
         img = cv2.resize(img, None, fx=f, fy=f)
         faces = self.face_cascade.detectMultiScale(img)
         if len(faces) == 0:
-            return False
+            return None, None, None
         x, y, w, h = max(faces, key=lambda xywh: xywh[2] * xywh[3])
         face = img[y:y+h, x:x+w]
         cv2.imwrite(face_path, face)
-        return True
+
+        size = os.stat(face_path).st_size
+        return size, w, h
 
     @staticmethod
     def cleanup(filenames):
@@ -89,29 +91,35 @@ class OWFace(widget.OWWidget):
         if self.img_attr is None:
             self.send("Data", self.data)
             return
+
+        new_table = self.data.copy()
         face_var = StringVariable("face")
         face_var.attributes["type"] = "image"
-        domain = Domain([], metas=[face_var])
-        faces_list = []
         tmp_files = []
-        n_faces = 0
-        for row in self.data:
+        face_indices = []
+        for i, row in enumerate(self.data):
             file_abs = str(row[self.img_attr])
             file_ext = self.get_ext(file_abs)
-            with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as f:
+            with tempfile.NamedTemporaryFile(
+                    suffix=file_ext, delete=False) as f:
                 face_abs = f.name
                 tmp_files.append(face_abs)
-            if self.find_face(file_abs, face_abs):
-                faces_list.append([face_abs])
-                n_faces += 1
-            else:
-                faces_list.append([""])
+            size, w, h = self.find_face(file_abs, face_abs)
+            if size is not None:
+                new_table[i, self.img_attr] = face_abs
+                new_table[i, "width"] = w
+                new_table[i, "height"] = h
+                new_table[i, "size"] = size
+                face_indices.append(i)
         atexit.register(self.cleanup, tmp_files)
-        self.info.setText("Detected %d faces." % n_faces)
+        self.info.setText("Detected %d faces." % len(face_indices))
 
-        self.faces = Table.from_list(domain, faces_list)
-        comb = Table.concatenate([self.data, self.faces])
-        self.send("Data", comb)
+        # remove all rows that do not include faces
+        new_table = Table.from_table(
+            new_table.domain, new_table, face_indices) if len(face_indices) \
+            else None
+
+        self.send("Data", new_table)
 
     def set_data(self, data):
         self.data = data
