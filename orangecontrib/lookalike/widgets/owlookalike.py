@@ -13,7 +13,8 @@ from AnyQt.QtGui import (QPainter, QPalette, QPixmap, QBrush, QFont)
 from AnyQt.QtWidgets import (QGraphicsWidget, QHeaderView, QGraphicsPixmapItem,
                              QDialog, QGraphicsLayoutItem, QGraphicsView,
                              QGraphicsScene, QGraphicsGridLayout,
-                             QGraphicsSimpleTextItem, QTableView)
+                             QGraphicsSimpleTextItem, QTableView,
+                             QStyledItemDelegate)
 
 from Orange.data import Table
 from Orange.widgets import gui
@@ -204,9 +205,11 @@ class OWLookalike(OWWidget):
         self.neighbors_view.verticalHeader().setVisible(False)
         self.neighbors_view.horizontalHeader().setVisible(False)
         self.neighbors_view.setModel(self.neighbors_model)
+        self.neighbors_view.setMaximumWidth(220)
         self.neighbors_view.selectionModel().selectionChanged.connect(
             self._neighbor_changed)
-        self.neighbors_view.setMaximumWidth(207)
+        self.neighbors_view.setItemDelegate(QStyledItemDelegate(self))
+        self.neighbors_view.sortByColumn(1, 1)
         box.layout().addWidget(self.neighbors_view)
 
         box = gui.vBox(self.controlArea, True)
@@ -250,8 +253,8 @@ class OWLookalike(OWWidget):
             return os.path.splitext(os.path.basename(name))[0].replace("_", " ")
 
         model = [[get_name(inst[self.neighbors_img_attr].value),
-                  inst["distance"].value if "distance" in
-                                              self.neighbors.domain else ""]
+                  round(float(inst["distance"].value), 2)
+                  if "distance" in self.neighbors.domain else ""]
                  for inst in self.neighbors]
         self.neighbors_model.wrap(model)
         selection = QItemSelection(self.neighbors_model.index(0, 0),
@@ -259,7 +262,7 @@ class OWLookalike(OWWidget):
         self.neighbors_view.selectionModel().select(
             selection, QItemSelectionModel.ClearAndSelect)
         self.neighbors_view.setColumnWidth(0, 160)
-        self.neighbors_view.setColumnWidth(1, 45)
+        self.neighbors_view.setColumnWidth(1, 60)
         self.apply()
 
     def set_reference(self, reference):
@@ -331,8 +334,9 @@ class OWLookalike(OWWidget):
         widget.setPos(0, 60)
         self.scene.addItem(widget)
 
-        title = QGraphicsSimpleTextItem("I am {:.2f}% {}".format(
-            float(self.neighbors_model.index(self.neighbor_index, 1).data()),
+        title = QGraphicsSimpleTextItem("I am {}% {}".format(
+            int(float(
+                self.neighbors_model.index(self.neighbor_index, 1).data())*100),
             self.neighbors_model.index(self.neighbor_index, 0).data()))
         title.setFont(QFont("Garamond", 25))
 
