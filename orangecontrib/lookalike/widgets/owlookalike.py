@@ -1,3 +1,5 @@
+import math
+import numbers
 import os
 import time
 import smtplib
@@ -13,7 +15,10 @@ from AnyQt.QtGui import (QPainter, QPalette, QPixmap, QBrush, QFont)
 from AnyQt.QtWidgets import (QGraphicsWidget, QHeaderView, QGraphicsPixmapItem,
                              QDialog, QGraphicsLayoutItem, QGraphicsView,
                              QGraphicsScene, QGraphicsGridLayout,
-                             QGraphicsSimpleTextItem, QTableView)
+                             QGraphicsSimpleTextItem, QTableView,
+                             QStyledItemDelegate, QStyleOptionViewItem)
+
+import numpy as np
 
 from Orange.data import Table
 from Orange.widgets import gui
@@ -153,6 +158,23 @@ class TitleGraphicsWidget(QGraphicsWidget):
         self.updateGeometry()
 
 
+class NumberFormatDelegate(QStyledItemDelegate):
+    def __init__(self, *args, format="{:.6g}", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__format = format
+
+    def initStyleOption(self, option, index):
+        # type: (QStyleOptionViewItem, QModelIndex) -> None
+        super().initStyleOption(option, index)
+        # lookup edit role to bypass PyTableModel's formating
+        val = index.data(Qt.EditRole)
+        if isinstance(val, numbers.Real):
+            if not math.isnan(val):
+                option.text = self.__format.format(val)
+            else:
+                option.text = ""
+
+
 class OWLookalike(OWWidget):
     name = "Lookalike"
     description = "Show reference and selected neighbor."
@@ -170,6 +192,10 @@ class OWLookalike(OWWidget):
     class Warning(OWWidget.Warning):
         missing_smtp_settings = Msg("Missing Email address or"
                                     " SMTP server name.")
+        invalid_metric = Msg(
+            "Invalid distance metric\n"
+            "Please use one of 'Cosine', 'Pearson', 'Abs. Pearson', ..."
+        )
 
     class Error(OWWidget.Error):
         no_images_neighbors = Msg("No images found in the neighbors table."
@@ -199,14 +225,18 @@ class OWLookalike(OWWidget):
         self.neighbors_view.setSelectionBehavior(QTableView.SelectRows)
         self.neighbors_view.setSelectionMode(QTableView.SingleSelection)
         self.neighbors_view.setWordWrap(False)
+        self.neighbors_view.setTextElideMode(Qt.ElideNone)
         self.neighbors_view.verticalHeader().setResizeMode(QHeaderView.Fixed)
         self.neighbors_view.verticalHeader().setDefaultSectionSize(18)
         self.neighbors_view.verticalHeader().setVisible(False)
         self.neighbors_view.horizontalHeader().setVisible(False)
         self.neighbors_view.setModel(self.neighbors_model)
+        self.neighbors_view.setMaximumWidth(220)
         self.neighbors_view.selectionModel().selectionChanged.connect(
             self._neighbor_changed)
-        self.neighbors_view.setMaximumWidth(207)
+        self.neighbors_view.setItemDelegateForColumn(
+            1, NumberFormatDelegate(self, format="{:.0%}")
+        )
         box.layout().addWidget(self.neighbors_view)
 
         box = gui.vBox(self.controlArea, True)
@@ -237,6 +267,7 @@ class OWLookalike(OWWidget):
     def set_neighbors(self, neighbors):
         self.clear_neighbors()
         self.neighbors = neighbors
+        self.Warning.invalid_metric.clear()
         if self.neighbors is None:
             return
 
@@ -248,18 +279,27 @@ class OWLookalike(OWWidget):
         def get_name(path):
             name = urlparse(path).path
             return os.path.splitext(os.path.basename(name))[0].replace("_", " ")
-
-        model = [[get_name(inst[self.neighbors_img_attr].value),
-                  inst["distance"].value if "distance" in
-                                              self.neighbors.domain else ""]
-                 for inst in self.neighbors]
+        if 'distance' in neighbors.domain:
+            dist_data = neighbors.get_column_view('distance')[0]
+            oob = dist_data > 1
+            if oob.any():
+                self.Warning.invalid_metric()
+                ratio_data = np.full(len(neighbors), np.nan)
+            else:
+                ratio_data = 1 - dist_data
+        else:
+            ratio_data = np.full(len(neighbors), np.nan)
+        img_data = neighbors.get_column_view(self.neighbors_img_attr)[0]
+        img_data = [get_name(path) for path in img_data]
+        model = list(map(list, zip(img_data, ratio_data)))
         self.neighbors_model.wrap(model)
+        self.neighbors_model.sort(1, Qt.DescendingOrder)
         selection = QItemSelection(self.neighbors_model.index(0, 0),
                                    self.neighbors_model.index(0, 1))
         self.neighbors_view.selectionModel().select(
             selection, QItemSelectionModel.ClearAndSelect)
         self.neighbors_view.setColumnWidth(0, 160)
-        self.neighbors_view.setColumnWidth(1, 45)
+        self.neighbors_view.setColumnWidth(1, 60)
         self.apply()
 
     def set_reference(self, reference):
@@ -279,11 +319,13 @@ class OWLookalike(OWWidget):
         self.scene.clear()
         rows = self.neighbors_view.selectionModel().selectedRows()
         if rows:
-            self.neighbor_index = rows[0].row()
+            row = rows[0].row()
+            (index, ) = self.neighbors_model.mapToSourceRows([row])
+            self.neighbor_index = index
             self.apply()
 
     def clear_neighbors(self):
-        self.neighbors_model[:] = []
+        self.neighbors_model.wrap([])
         self.scene.clear()
         self.Error.no_images_neighbors.clear()
         self.neighbors_img_attr = None
@@ -330,10 +372,18 @@ class OWLookalike(OWWidget):
                           img_negh, self.orange_logo_item])
         widget.setPos(0, 60)
         self.scene.addItem(widget)
+        # map to model row index
+        (index, ) = self.neighbors_model.mapFromSourceRows([self.neighbor_index])
+        index_0 = self.neighbors_model.index(index, 0)
+        index_1 = self.neighbors_model.index(index, 1)
 
-        title = QGraphicsSimpleTextItem("I am {:.2f}% {}".format(
-            float(self.neighbors_model.index(self.neighbor_index, 1).data()),
-            self.neighbors_model.index(self.neighbor_index, 0).data()))
+        name = index_0.data(Qt.DisplayRole)
+        ratio = index_1.data(Qt.EditRole)
+        if isinstance(ratio, numbers.Real) and not math.isnan(ratio):
+            text = "I am {:.0%} {}".format(ratio, name)
+        else:
+            text = ""
+        title = QGraphicsSimpleTextItem(text)
         title.setFont(QFont("Garamond", 25))
 
         title_widget = TitleGraphicsWidget(neighbors_image.width() * 2 + 40)
