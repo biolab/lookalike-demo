@@ -16,7 +16,9 @@ from AnyQt.QtWidgets import (QGraphicsWidget, QHeaderView, QGraphicsPixmapItem,
                              QDialog, QGraphicsLayoutItem, QGraphicsView,
                              QGraphicsScene, QGraphicsGridLayout,
                              QGraphicsSimpleTextItem, QTableView,
-                             QStyledItemDelegate)
+                             QStyledItemDelegate, QStyleOptionViewItem)
+
+import numpy as np
 
 from Orange.data import Table
 from Orange.widgets import gui
@@ -156,6 +158,23 @@ class TitleGraphicsWidget(QGraphicsWidget):
         self.updateGeometry()
 
 
+class NumberFormatDelegate(QStyledItemDelegate):
+    def __init__(self, *args, format="{:.6g}", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__format = format
+
+    def initStyleOption(self, option, index):
+        # type: (QStyleOptionViewItem, QModelIndex) -> None
+        super().initStyleOption(option, index)
+        # lookup edit role to bypass PyTableModel's formating
+        val = index.data(Qt.EditRole)
+        if isinstance(val, numbers.Real):
+            if not math.isnan(val):
+                option.text = self.__format.format(val)
+            else:
+                option.text = ""
+
+
 class OWLookalike(OWWidget):
     name = "Lookalike"
     description = "Show reference and selected neighbor."
@@ -173,6 +192,10 @@ class OWLookalike(OWWidget):
     class Warning(OWWidget.Warning):
         missing_smtp_settings = Msg("Missing Email address or"
                                     " SMTP server name.")
+        invalid_metric = Msg(
+            "Invalid distance metric\n"
+            "Please use one of 'Cosine', 'Pearson', 'Abs. Pearson', ..."
+        )
 
     class Error(OWWidget.Error):
         no_images_neighbors = Msg("No images found in the neighbors table."
@@ -211,6 +234,9 @@ class OWLookalike(OWWidget):
         self.neighbors_view.setMaximumWidth(220)
         self.neighbors_view.selectionModel().selectionChanged.connect(
             self._neighbor_changed)
+        self.neighbors_view.setItemDelegateForColumn(
+            1, NumberFormatDelegate(self, format="{:.0%}")
+        )
         box.layout().addWidget(self.neighbors_view)
 
         box = gui.vBox(self.controlArea, True)
@@ -241,6 +267,7 @@ class OWLookalike(OWWidget):
     def set_neighbors(self, neighbors):
         self.clear_neighbors()
         self.neighbors = neighbors
+        self.Warning.invalid_metric.clear()
         if self.neighbors is None:
             return
 
@@ -252,13 +279,21 @@ class OWLookalike(OWWidget):
         def get_name(path):
             name = urlparse(path).path
             return os.path.splitext(os.path.basename(name))[0].replace("_", " ")
-
-        model = [[get_name(inst[self.neighbors_img_attr].value),
-                  inst["distance"].value
-                  if "distance" in self.neighbors.domain else ""]
-                 for inst in self.neighbors]
+        if 'distance' in neighbors.domain:
+            dist_data = neighbors.get_column_view('distance')[0]
+            oob = dist_data > 1
+            if oob.any():
+                self.Warning.invalid_metric()
+                ratio_data = np.full(len(neighbors), np.nan)
+            else:
+                ratio_data = 1 - dist_data
+        else:
+            ratio_data = np.full(len(neighbors), np.nan)
+        img_data = neighbors.get_column_view(self.neighbors_img_attr)[0]
+        img_data = [get_name(path) for path in img_data]
+        model = list(map(list, zip(img_data, ratio_data)))
         self.neighbors_model.wrap(model)
-        self.neighbors_model.sort(1, Qt.AscendingOrder)
+        self.neighbors_model.sort(1, Qt.DescendingOrder)
         selection = QItemSelection(self.neighbors_model.index(0, 0),
                                    self.neighbors_model.index(0, 1))
         self.neighbors_view.selectionModel().select(
@@ -343,12 +378,11 @@ class OWLookalike(OWWidget):
         index_1 = self.neighbors_model.index(index, 1)
 
         name = index_0.data(Qt.DisplayRole)
-        distance = index_1.data(Qt.EditRole)
-        if isinstance(distance, numbers.Real) and not math.isnan(distance):
-            numtext = "{:.6g}".format(distance)
-            text = "I am {} (unspecified units) away from {}".format(numtext, name)
+        ratio = index_1.data(Qt.EditRole)
+        if isinstance(ratio, numbers.Real) and not math.isnan(ratio):
+            text = "I am {:.0%} {}".format(ratio, name)
         else:
-            text = "I am not a number!"  # I am a free man!
+            text = ""
         title = QGraphicsSimpleTextItem(text)
         title.setFont(QFont("Garamond", 25))
 
