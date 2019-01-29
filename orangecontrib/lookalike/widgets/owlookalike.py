@@ -1,3 +1,5 @@
+import math
+import numbers
 import os
 import time
 import smtplib
@@ -200,6 +202,7 @@ class OWLookalike(OWWidget):
         self.neighbors_view.setSelectionBehavior(QTableView.SelectRows)
         self.neighbors_view.setSelectionMode(QTableView.SingleSelection)
         self.neighbors_view.setWordWrap(False)
+        self.neighbors_view.setTextElideMode(Qt.ElideNone)
         self.neighbors_view.verticalHeader().setResizeMode(QHeaderView.Fixed)
         self.neighbors_view.verticalHeader().setDefaultSectionSize(18)
         self.neighbors_view.verticalHeader().setVisible(False)
@@ -208,8 +211,6 @@ class OWLookalike(OWWidget):
         self.neighbors_view.setMaximumWidth(220)
         self.neighbors_view.selectionModel().selectionChanged.connect(
             self._neighbor_changed)
-        self.neighbors_view.setItemDelegate(QStyledItemDelegate(self))
-        self.neighbors_view.sortByColumn(1, 1)
         box.layout().addWidget(self.neighbors_view)
 
         box = gui.vBox(self.controlArea, True)
@@ -253,10 +254,11 @@ class OWLookalike(OWWidget):
             return os.path.splitext(os.path.basename(name))[0].replace("_", " ")
 
         model = [[get_name(inst[self.neighbors_img_attr].value),
-                  round(float(inst["distance"].value), 2)
+                  inst["distance"].value
                   if "distance" in self.neighbors.domain else ""]
                  for inst in self.neighbors]
         self.neighbors_model.wrap(model)
+        self.neighbors_model.sort(1, Qt.AscendingOrder)
         selection = QItemSelection(self.neighbors_model.index(0, 0),
                                    self.neighbors_model.index(0, 1))
         self.neighbors_view.selectionModel().select(
@@ -282,11 +284,13 @@ class OWLookalike(OWWidget):
         self.scene.clear()
         rows = self.neighbors_view.selectionModel().selectedRows()
         if rows:
-            self.neighbor_index = rows[0].row()
+            row = rows[0].row()
+            (index, ) = self.neighbors_model.mapToSourceRows([row])
+            self.neighbor_index = index
             self.apply()
 
     def clear_neighbors(self):
-        self.neighbors_model[:] = []
+        self.neighbors_model.wrap([])
         self.scene.clear()
         self.Error.no_images_neighbors.clear()
         self.neighbors_img_attr = None
@@ -333,11 +337,19 @@ class OWLookalike(OWWidget):
                           img_negh, self.orange_logo_item])
         widget.setPos(0, 60)
         self.scene.addItem(widget)
+        # map to model row index
+        (index, ) = self.neighbors_model.mapFromSourceRows([self.neighbor_index])
+        index_0 = self.neighbors_model.index(index, 0)
+        index_1 = self.neighbors_model.index(index, 1)
 
-        title = QGraphicsSimpleTextItem("I am {}% {}".format(
-            int(float(
-                self.neighbors_model.index(self.neighbor_index, 1).data())*100),
-            self.neighbors_model.index(self.neighbor_index, 0).data()))
+        name = index_0.data(Qt.DisplayRole)
+        distance = index_1.data(Qt.EditRole)
+        if isinstance(distance, numbers.Real) and not math.isnan(distance):
+            numtext = "{:.6g}".format(distance)
+            text = "I am {} (unspecified units) away from {}".format(numtext, name)
+        else:
+            text = "I am not a number!"  # I am a free man!
+        title = QGraphicsSimpleTextItem(text)
         title.setFont(QFont("Garamond", 25))
 
         title_widget = TitleGraphicsWidget(neighbors_image.width() * 2 + 40)
