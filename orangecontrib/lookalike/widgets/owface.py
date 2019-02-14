@@ -7,7 +7,6 @@ import urllib
 import cv2
 import numpy as np
 import sys
-import threading
 
 from Orange.data import Table, Domain, StringVariable
 from Orange.widgets import widget
@@ -17,13 +16,6 @@ from Orange.widgets import gui
 
 face_cascade_classifier = cv2.CascadeClassifier(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'haarcascade_frontalface_default.xml'))
-
-eye_cascade_classifier = cv2.CascadeClassifier(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'haarcascade_eye.xml'))
-
-mouth_cascade_classifier = cv2.CascadeClassifier(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'haarcascade_smile.xml'))
-
 
 class OWFace(widget.OWWidget):
     name = "Face Detector"
@@ -78,7 +70,6 @@ class OWFace(widget.OWWidget):
 
     def find_face(self, file_path, face_path):
         """Find the face in image file_path and store it in face_path."""
-        #print(threading.currentThread().getName(), 'Starting')
         img = self.read_img(file_path)
         if img is None:
             return False
@@ -91,7 +82,6 @@ class OWFace(widget.OWWidget):
         x, y, w, h = max(faces, key=lambda xywh: xywh[2] * xywh[3])
         face = img[y:y+h, x:x+w]
         cv2.imwrite(face_path, face)
-        #print(threading.currentThread().getName(), 'Exiting')
         return True
 
     @staticmethod
@@ -115,9 +105,6 @@ class OWFace(widget.OWWidget):
             with tempfile.NamedTemporaryFile(suffix=file_ext, delete=False) as f:
                 face_abs = f.name
                 tmp_files.append(face_abs)
-            #t = threading.Thread(target=self.find_face, args=(file_abs, face_abs))
-            #threads.append(t)
-            #t.start()   
             if self.find_face(file_abs, face_abs):
                 faces_list.append([face_abs])
                 n_faces += 1
