@@ -247,9 +247,9 @@ class OWLookalike(OWWidget):
 
         def get_name(path):
             name = urlparse(path).path
-            path=self.neighbors_img_attr.attributes['origin']+path
+            path = self.neighbors_img_attr.attributes['origin'] + path
             return os.path.splitext(os.path.basename(name))[0].replace("_", " ")
-            
+
         model = [[get_name(inst[self.neighbors_img_attr].value),
                   inst["similarity"].value if "similarity" in
                                               self.neighbors.domain else ""]
