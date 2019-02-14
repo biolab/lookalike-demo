@@ -14,8 +14,6 @@ from Orange.data import Table, Domain, StringVariable
 from Orange.widgets import gui, widget, settings
 
 from orangecontrib.lookalike.widgets.owface import face_cascade_classifier
-from orangecontrib.lookalike.widgets.owface import eye_cascade_classifier
-from orangecontrib.lookalike.widgets.owface import mouth_cascade_classifier
 
 
 class OWNWebcamCapture(widget.OWWidget):
@@ -36,8 +34,6 @@ class OWNWebcamCapture(widget.OWWidget):
 
     avatar_filter = settings.Setting(False)
     frame_viewer = settings.Setting(False)
-    eye_frame_viewer = settings.Setting(False)
-    mouth_frame_viewer = settings.Setting(False)
     image_title = ''
 
     DEFAULT_TITLE = 'Snapshot'
@@ -73,8 +69,6 @@ class OWNWebcamCapture(widget.OWWidget):
         
         hbox = gui.hBox(box)
         gui.checkBox(hbox, self, 'frame_viewer', 'View Head Frame')
-        gui.checkBox(hbox, self, 'eye_frame_viewer', 'View Eye Frame')
-        gui.checkBox(hbox, self, 'mouth_frame_viewer', 'View Mouth Frame')
         box.layout().addWidget(hbox)
         
         timer = QTimer(self, interval=40)
@@ -116,11 +110,6 @@ class OWNWebcamCapture(widget.OWWidget):
                 cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
             for (x,y,w,h) in faces:
                 cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
-                if self.eye_frame_viewer:
-                    roi_color = frame[y:y+h, x:x+w]
-                    eyes = eye_cascade_classifier.detectMultiScale(cv2.cvtColor(roi_color, cv2.COLOR_BGR2GRAY))
-                    for (ex,ey,ew,eh) in eyes:
-                        cv2.rectangle(roi_color,(ex,ey),(ex+ew,ey+eh),(0,255,0),2)
                 
         image = QImage(frame if self.avatar_filter else self.bgr2rgb(frame),
                        frame.shape[1], frame.shape[0], QImage.Format_RGB888)
