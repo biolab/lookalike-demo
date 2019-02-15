@@ -251,7 +251,7 @@ class OWLookalike(OWWidget):
             return os.path.splitext(os.path.basename(name))[0].replace("_", " ")
 
         model = [[get_name(inst[self.neighbors_img_attr].value),
-                  inst["similarity"].value if "similarity" in
+                  inst["distance"].value if "distance" in
                                               self.neighbors.domain else ""]
                  for inst in self.neighbors]
         self.neighbors_model.wrap(model)

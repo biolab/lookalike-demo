@@ -124,8 +124,6 @@ class OWNWebcamCapture(widget.OWWidget):
 
         faces = face_cascade_classifier.detectMultiScale(
             cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
-        for (x,y,w,h) in faces:
-            cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),2)
         fh, fw = frame.shape[:2]
         if len(faces):
             x, y, w, h = faces[0]
