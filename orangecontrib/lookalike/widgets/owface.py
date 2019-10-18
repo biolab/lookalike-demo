@@ -6,16 +6,17 @@ import urllib
 
 import cv2
 import numpy as np
-import sys
 
 from Orange.data import Table, Domain, StringVariable
 from Orange.widgets import widget
 from Orange.widgets.settings import Setting
 from Orange.widgets import gui
-
+from orangewidget.utils.signals import Input, Output
+from orangewidget.utils.widgetpreview import WidgetPreview
 
 face_cascade_classifier = cv2.CascadeClassifier(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'haarcascade_frontalface_default.xml'))
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data',
+                 'haarcascade_frontalface_default.xml'))
 
 
 class OWFace(widget.OWWidget):
@@ -24,10 +25,15 @@ class OWFace(widget.OWWidget):
     icon = "icons/Face.svg"
     priority = 123
 
-    inputs = [("Data", Table, "set_data")]
-    outputs = [("Data", Table)]
+    class Inputs:
+        data = Input("Data", Table)
+
+    class Outputs:
+        data = Output("Data", Table)
 
     auto_run = Setting(True)
+
+    want_main_area = False
 
     def __init__(self):
         super().__init__()
@@ -35,7 +41,8 @@ class OWFace(widget.OWWidget):
         self.img_attr = None
         self.faces = None
 
-        haarcascade = os.path.join(os.path.dirname(__file__), 'data/haarcascade_frontalface_default.xml')
+        haarcascade = os.path.join(os.path.dirname(__file__),
+                                   'data/haarcascade_frontalface_default.xml')
         self.face_cascade = cv2.CascadeClassifier(haarcascade)
 
         box = gui.vBox(self.controlArea, "Info")
@@ -110,9 +117,14 @@ class OWFace(widget.OWWidget):
         self.info.setText("Detected %d faces." % n_faces)
 
         self.faces = Table.from_list(domain, faces_list)
-        comb = Table.concatenate([self.data, self.faces])
-        self.send("Data", comb)
+        new_domain = Domain(self.data.domain.attributes,
+                            metas=self.data.domain.metas +
+                                  self.faces.domain.metas)
+        comb = self.data.transform(new_domain)
+        comb[:, face_var] = faces_list
+        self.Outputs.data.send(comb)
 
+    @Inputs.data
     def set_data(self, data):
         self.data = data
         self.faces = None
@@ -128,3 +140,7 @@ class OWFace(widget.OWWidget):
             self.info.setText("Image attribute: %s" % str(self.img_attr))
         if self.auto_run:
             self.commit()
+
+
+if __name__ == "__main__":
+    WidgetPreview(OWFace).run(set_data=Table.from_url("https://datasets.biolab.si//core/bone-healing.xlsx"))
